@@ -609,7 +609,6 @@ def main():
 
     # HERE
     # model.resize_token_embeddings(len(tokenizer))
-
     if config.model_type in ["bert", "roberta", "distilbert", "camembert"] and not data_args.mlm:
         raise ValueError(
             "BERT and RoBERTa-like models do not have LM heads but masked LM heads. They must be run using the"
