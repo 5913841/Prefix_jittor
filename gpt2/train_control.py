@@ -2,7 +2,7 @@
 from typing import Optional, Tuple, Union
 import warnings
 import jittor as jt
-from ModelOutput import CausalLMOutputWithCrossAttentions
+from ModelOutput import CausalLMOutputWithCrossAttentions, CausalLMOutputWithPast
 from PreTrainedModel import GPT2PreTrainedModel
 from jittor import nn
 from GPT2Model import GPT2Model
@@ -1040,7 +1040,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
             output = (lm_logits,) + transformer_outputs[1:]
             return ((loss,) + output) if loss is not None else output
 
-        return nn.CausalLMOutputWithPast(
+        return CausalLMOutputWithPast(
             loss=loss,
             logits=lm_logits,
             past_key_values=transformer_outputs.past_key_values,
