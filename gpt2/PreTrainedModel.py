@@ -1,3 +1,6 @@
+import sys
+
+sys.path.insert(0, '../')
 
 import re
 import jittor as jt
