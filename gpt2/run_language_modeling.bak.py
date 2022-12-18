@@ -18,11 +18,10 @@ Fine-tuning the library models for language modeling on a text file (GPT, GPT-2,
 GPT, GPT-2 and CTRL are fine-tuned using a causal language modeling (CLM) loss. BERT and RoBERTa are fine-tuned
 using a masked language modeling (MLM) loss. XLNet is fine-tuned using a permutation language modeling (PLM) loss.
 """
-import sys
 
-sys.path.insert(0, '../')
 
 import logging
+import math
 import os
 from dataclasses import dataclass, field
 from typing import Optional
@@ -32,18 +31,33 @@ import jittor as jt
 from jittor import init
 from jittor import nn
 import glob
-from typing import List
-from transformers import HfArgumentParser, EvaluationStrategy, PreTrainedTokenizer, AutoConfig, AutoTokenizer
+from .utils.tokenization_utils import PreTrainedTokenizer
 
-from language_modeling_jittor import LineByLineWebNLGTextDataset, LineByLineData2TextTextDataset, DataCollatorForData2TextLanguageModeling
+from ..transformers import (
+    CONFIG_MAPPING,
+    MODEL_WITH_LM_HEAD_MAPPING,
+    AutoConfig, # 无需修改
+    AutoModelWithLMHead, # 无需修改
+    AutoTokenizer,  # 无需修改
+    DataCollatorForData2TextLanguageModeling, # 需修改
+    HfArgumentParser, # 无需修改
+    LineByLineData2TextTextDataset, # 需修改
+    LineByLineWebNLGTextDataset, # 需修改
+    PreTrainedTokenizer, # 无需修改
+    TextDataset, # 需修改
+    TrainingArguments, # 需修改
+)
 
-from trainer_prefix_jittor import Trainer_Prefix
+from trainer_prefix import Trainer_Prefix
+
+
 
 logger = logging.getLogger(__name__)
 
 
-# MODEL_CONFIG_CLASSES = list(MODEL_WITH_LM_HEAD_MAPPING.keys())
-# MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
+MODEL_CONFIG_CLASSES = list(MODEL_WITH_LM_HEAD_MAPPING.keys())
+MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
+
 
 @dataclass
 class ModelArguments:
@@ -220,7 +234,7 @@ class ModelArguments:
 
     model_type: Optional[str] = field(
         default=None,
-        metadata={"help": "If training from scratch, pass a model type from the list: " + ", "},
+        metadata={"help": "If training from scratch, pass a model type from the list: " + ", ".join(MODEL_TYPES)},
     )
     config_name: Optional[str] = field(
         default=None, metadata={"help": "Pretrained config name or path if not the same as model_name"}
@@ -332,155 +346,6 @@ class DataTrainingArguments:
         default=False, metadata={"help": "Overwrite the cached training and evaluation sets"}
     )
 
-def default_logdir() -> str:
-    import socket
-    from datetime import datetime
-
-    current_time = datetime.now().strftime("%b%d_%H-%M-%S")
-    return os.path.join("runs", current_time + "_" + socket.gethostname())
-
-@dataclass
-class TrainingArguments:
-
-    output_dir: str = field(
-        metadata={"help": "The output directory where the model predictions and checkpoints will be written."}
-    )
-    overwrite_output_dir: bool = field(
-        default=False,
-        metadata={
-            "help": (
-                "Overwrite the content of the output directory."
-                "Use this to continue training if output_dir points to a checkpoint directory."
-            )
-        },
-    )
-
-    do_train: bool = field(default=False, metadata={"help": "Whether to run training."})
-    do_eval: bool = field(default=False, metadata={"help": "Whether to run eval on the dev set."})
-    do_predict: bool = field(default=False, metadata={"help": "Whether to run predictions on the test set."})
-    evaluate_during_training: bool = field(
-        default=None,
-        metadata={"help": "Run evaluation during training at each logging step."},
-    )
-    evaluation_strategy: EvaluationStrategy = field(
-        default="no",
-        metadata={"help": "Run evaluation during training at each logging step."},
-    )
-    prediction_loss_only: bool = field(
-        default=False,
-        metadata={"help": "When performing evaluation and predictions, only returns the loss."},
-    )
-
-    per_device_train_batch_size: int = field(
-        default=8, metadata={"help": "Batch size per GPU/TPU core/CPU for training."}
-    )
-    per_device_eval_batch_size: int = field(
-        default=8, metadata={"help": "Batch size per GPU/TPU core/CPU for evaluation."}
-    )
-
-    per_gpu_train_batch_size: Optional[int] = field(
-        default=None,
-        metadata={
-            "help": "Deprecated, the use of `--per_device_train_batch_size` is preferred. "
-            "Batch size per GPU/TPU core/CPU for training."
-        },
-    )
-    per_gpu_eval_batch_size: Optional[int] = field(
-        default=None,
-        metadata={
-            "help": "Deprecated, the use of `--per_device_eval_batch_size` is preferred."
-            "Batch size per GPU/TPU core/CPU for evaluation."
-        },
-    )
-
-    gradient_accumulation_steps: int = field(
-        default=1,
-        metadata={"help": "Number of updates steps to accumulate before performing a backward/update pass."},
-    )
-
-    learning_rate: float = field(default=5e-5, metadata={"help": "The initial learning rate for Adam."})
-    weight_decay: float = field(default=0.0, metadata={"help": "Weight decay if we apply some."})
-    adam_beta1: float = field(default=0.9, metadata={"help": "Beta1 for Adam optimizer"})
-    adam_beta2: float = field(default=0.999, metadata={"help": "Beta2 for Adam optimizer"})
-    adam_epsilon: float = field(default=1e-8, metadata={"help": "Epsilon for Adam optimizer."})
-    max_grad_norm: float = field(default=1.0, metadata={"help": "Max gradient norm."})
-
-    num_train_epochs: float = field(default=3.0, metadata={"help": "Total number of training epochs to perform."})
-    max_steps: int = field(
-        default=-1,
-        metadata={"help": "If > 0: set total number of training steps to perform. Override num_train_epochs."},
-    )
-    warmup_steps: int = field(default=0, metadata={"help": "Linear warmup over warmup_steps."})
-
-    logging_dir: Optional[str] = field(default_factory=default_logdir, metadata={"help": "Tensorboard log dir."})
-    logging_first_step: bool = field(default=False, metadata={"help": "Log and eval the first global_step"})
-    logging_steps: int = field(default=500, metadata={"help": "Log every X updates steps."})
-    save_steps: int = field(default=500, metadata={"help": "Save checkpoint every X updates steps."})
-    save_total_limit: Optional[int] = field(
-        default=None,
-        metadata={
-            "help": (
-                "Limit the total amount of checkpoints."
-                "Deletes the older checkpoints in the output_dir. Default is unlimited checkpoints"
-            )
-        },
-    )
-    no_cuda: bool = field(default=False, metadata={"help": "Do not use CUDA even when it is available"})
-    seed: int = field(default=42, metadata={"help": "random seed for initialization"})
-
-    fp16: bool = field(
-        default=False,
-        metadata={"help": "Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit"},
-    )
-    fp16_opt_level: str = field(
-        default="O1",
-        metadata={
-            "help": (
-                "For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']."
-                "See details at https://nvidia.github.io/apex/amp.html"
-            )
-        },
-    )
-    local_rank: int = field(default=-1, metadata={"help": "For distributed training: local_rank"})
-
-    tpu_num_cores: Optional[int] = field(
-        default=None, metadata={"help": "TPU: Number of TPU cores (automatically passed by launcher script)"}
-    )
-    tpu_metrics_debug: bool = field(
-        default=False,
-        metadata={"help": "Deprecated, the use of `--debug` is preferred. TPU: Whether to print debug metrics"},
-    )
-    debug: bool = field(default=False, metadata={"help": "Whether to print debug metrics on TPU"})
-
-    dataloader_drop_last: bool = field(
-        default=False, metadata={"help": "Drop the last incomplete batch if it is not divisible by the batch size."}
-    )
-    eval_steps: int = field(default=None, metadata={"help": "Run an evaluation every X steps."})
-    dataloader_num_workers: int = field(
-        default=0,
-        metadata={
-            "help": "Number of subprocesses to use for data loading (PyTorch only). 0 means that the data will be loaded in the main process."
-        },
-    )
-
-    past_index: int = field(
-        default=-1,
-        metadata={"help": "If >=0, uses the corresponding part of the output as the past state for next step."},
-    )
-
-    run_name: Optional[str] = field(
-        default=None, metadata={"help": "An optional descriptor for the run. Notably used for wandb logging."}
-    )
-    disable_tqdm: Optional[bool] = field(
-        default=False, metadata={"help": "Whether or not to disable the tqdm progress bars."}
-    )
-
-    remove_unused_columns: Optional[bool] = field(
-        default=True, metadata={"help": "Remove columns not required by the model when using an nlp.Dataset."}
-    )
-    label_names: Optional[List[str]] = field(
-        default=None, metadata={"help": "The list of keys in your dictionary of inputs that correspond to the labels."}
-    )
 
 def get_dataset(
     args: DataTrainingArguments,
@@ -491,19 +356,29 @@ def get_dataset(
     finetune_mode: bool = False,
 ):
     file_path = args.eval_data_file if evaluate else args.train_data_file
-    if args.task_mode == 'data2text':
-        dataset = LineByLineData2TextTextDataset(tokenizer=tokenizer, file_path=file_path,
-                                                block_size=args.block_size, bos_tok=tokenizer.bos_token,
-                                                eos_tok=tokenizer.eos_token,
-                                                lowdata_token=args.lowdata_token if ('lowdata' in training_args.output_dir and finetune_mode) else None)
+    if args.line_by_line:
+        print(args.task_mode)
+        if args.task_mode == 'data2text':
+            dataset = LineByLineData2TextTextDataset(tokenizer=tokenizer, file_path=file_path,
+                                                 block_size=args.block_size, bos_tok=tokenizer.bos_token,
+                                                 eos_tok=tokenizer.eos_token,
+                                                 lowdata_token=args.lowdata_token if ('lowdata' in training_args.output_dir and finetune_mode) else None)
 
-    elif args.task_mode == 'webnlg':
-        dataset = LineByLineWebNLGTextDataset(tokenizer=tokenizer, file_path=file_path,
-                                                    block_size=args.block_size, bos_tok=tokenizer.bos_token,
-                                                    eos_tok=tokenizer.eos_token)
+        elif args.task_mode == 'webnlg':
+            dataset = LineByLineWebNLGTextDataset(tokenizer=tokenizer, file_path=file_path,
+                                                     block_size=args.block_size, bos_tok=tokenizer.bos_token,
+                                                     eos_tok=tokenizer.eos_token)
+        else:
+            print("task mode false")
+        return dataset
     else:
-        print("task mode false")
-    return dataset
+        return TextDataset(
+            tokenizer=tokenizer,
+            file_path=file_path,
+            block_size=args.block_size,
+            overwrite_cache=args.overwrite_cache,
+            cache_dir=cache_dir,
+        )
 
 
 def main():
@@ -513,7 +388,8 @@ def main():
 
     parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
-    print("line_by_line", data_args.line_by_line)
+
+
     if data_args.eval_data_file is None and training_args.do_eval:
         raise ValueError(
             "Cannot do evaluation without an evaluation data file. Either supply a file to --eval_data_file "
@@ -558,6 +434,9 @@ def main():
         config = AutoConfig.from_pretrained(model_args.config_name, cache_dir=model_args.cache_dir)
     elif model_args.model_name_or_path:
         config = AutoConfig.from_pretrained(model_args.model_name_or_path, cache_dir=model_args.cache_dir)
+    else:
+        config = CONFIG_MAPPING[model_args.model_type]()
+        logger.warning("You are instantiating a new config instance from scratch.")
 
     if model_args.tokenizer_name:
         tokenizer = AutoTokenizer.from_pretrained(model_args.tokenizer_name, cache_dir=model_args.cache_dir)
@@ -724,6 +603,7 @@ def main():
     ##############################################################
     #################LOADING DATASETS ###########################
     ##############################################################
+    print("line_by_line", data_args.line_by_line)
     train_dataset = (
         get_dataset(data_args, tokenizer=tokenizer, cache_dir=model_args.cache_dir, training_args=training_args,
                     finetune_mode=(model_args.tuning_mode == 'finetune')) #if training_args.do_train else None
@@ -734,7 +614,7 @@ def main():
         if training_args.do_eval
         else None
     )
-    if data_args.task_mode == 'data2text' or data_args.task_mode == 'webnlg':
+    if data_args.task_mode == 'data2text' or data_args.task_mode== 'triples' or data_args.task_mode == 'webnlg':
         print('FORMAT MODE IS ', data_args.format_mode)
         data_collator = DataCollatorForData2TextLanguageModeling(
             tokenizer=tokenizer, mlm=data_args.mlm, mlm_probability=data_args.mlm_probability,
