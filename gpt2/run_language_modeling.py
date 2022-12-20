@@ -27,7 +27,6 @@ from transformers.file_utils import cached_path
 import jittor as jt
 from jittor import init
 from jittor import nn
-import glob
 from typing import List
 from transformers import HfArgumentParser, PreTrainedTokenizer, AutoConfig, AutoTokenizer
 from transformers.trainer_utils import EvaluationStrategy

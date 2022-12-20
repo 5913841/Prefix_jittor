@@ -1,19 +1,15 @@
-import inspect
 import json
 import math
 import os
 import re
 import shutil
 import warnings
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-from nltk import word_tokenize
 from transformers.modeling_auto import MODEL_FOR_QUESTION_ANSWERING_MAPPING
 import numpy as np
 
-from packaging import version
 
 import jittor as jt
 from jittor import nn

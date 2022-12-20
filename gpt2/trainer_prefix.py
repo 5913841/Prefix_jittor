@@ -9,7 +9,6 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-from nltk import word_tokenize
 import numpy as np
 import torch
 from packaging import version
@@ -20,7 +19,6 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data.sampler import RandomSampler, Sampler, SequentialSampler
 from tqdm.auto import tqdm, trange
 from torch.nn.utils.rnn import pad_sequence
-import random
 
 from transformers.data.data_collator import DataCollator, DataCollatorWithPadding, default_data_collator
 from transformers.file_utils import is_datasets_available, is_torch_tpu_available
