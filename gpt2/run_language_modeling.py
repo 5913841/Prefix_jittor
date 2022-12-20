@@ -29,7 +29,8 @@ from jittor import init
 from jittor import nn
 import glob
 from typing import List
-from transformers import HfArgumentParser, EvaluationStrategy, PreTrainedTokenizer, AutoConfig, AutoTokenizer
+from transformers import HfArgumentParser, PreTrainedTokenizer, AutoConfig, AutoTokenizer
+from transformers.trainer_utils import EvaluationStrategy
 
 from language_modeling_jittor import LineByLineWebNLGTextDataset, LineByLineData2TextTextDataset, DataCollatorForData2TextLanguageModeling
 
@@ -535,8 +536,8 @@ def main():
     logger.warning(
         "Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
         training_args.local_rank,
-        training_args.device,
-        training_args.n_gpu,
+        # training_args.device,
+        # training_args.n_gpu,
         bool(training_args.local_rank != -1),
         training_args.fp16,
     )

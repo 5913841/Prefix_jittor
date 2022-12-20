@@ -20,7 +20,7 @@ from jittor import nn
 from jittor.dataset import Dataset
 from jittor.dataset.sampler import Sampler, SequentialSampler, RandomSampler
 from transformers.utils import logging
-from PreTrainedModel import PreTrainedModel
+from pretrainedmodel import PreTrainedModel
 from tqdm.auto import tqdm, trange
 from transformers.training_args import TrainingArguments
 from transformers.data.data_collator import DataCollator, DataCollatorWithPadding, default_data_collator

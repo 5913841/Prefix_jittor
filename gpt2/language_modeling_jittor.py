@@ -1,5 +1,5 @@
 import sys
-import logging
+from transformers.utils import logging
 import os
 import copy
 from jittor.dataset import Dataset

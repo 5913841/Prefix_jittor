@@ -2,10 +2,10 @@
 from typing import Optional, Tuple, Union
 import warnings
 import jittor as jt
-from ModelOutput import CausalLMOutputWithCrossAttentions, CausalLMOutputWithPast
-from PreTrainedModel import GPT2PreTrainedModel
+from modeloutput import CausalLMOutputWithCrossAttentions, CausalLMOutputWithPast
+from pretrainedmodel import GPT2PreTrainedModel
 from jittor import nn
-from GPT2Model import GPT2Model
+from gpt2model import GPT2Model
 
 class PrefixTuning(GPT2PreTrainedModel):
     """Classification Head for  transformer encoders"""
