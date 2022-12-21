@@ -1,5 +1,6 @@
 transformers
-torch
-jittor
+torch 
+torchvision
+torchaudiojittor
 numpy
 collections

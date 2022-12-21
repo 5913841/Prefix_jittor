@@ -829,7 +829,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
     #     output_type=CausalLMOutputWithPast,
     #     config_class=_CONFIG_FOR_DOC,
     # )
-    def forward(
+    def execute(
         self,
         input_ids=None,
         weights=None,
@@ -949,7 +949,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
             shift_logits = lm_logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
             # Flatten the tokens
-            loss_fct = nn.CrossEntropyLoss(reduction='none')
+            loss_fct = nn.CrossEntropyLoss()
             # print(weights)
             bsz, seqlen, vocab_size = shift_logits.shape
             loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
@@ -993,36 +993,36 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
                 # loss = loss.view(bsz, seqlen).sum(dim=-1) / seqlen_dim
             elif self._objective_mode == 1:
                 # print('1 is the objective...')
-                loss_fct = nn.CrossEntropyLoss(reduction='none')
+                loss_fct = nn.CrossEntropyLoss()
                 bsz, seqlen, vocab_size = shift_logits.shape
                 loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-                loss = loss.view(bsz, seqlen).sum(dim=-1)
+                # loss = loss.view(bsz, seqlen).sum(dim=-1)
             elif self._objective_mode == 2:
                 # print('2 is the objective...')
-                loss_fct = nn.CrossEntropyLoss(reduction='none')
+                loss_fct = nn.CrossEntropyLoss()
                 bsz, seqlen, vocab_size = shift_logits.shape
                 loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-                loss = loss.view(bsz, seqlen).mean(dim=-1)
+                # loss = loss.view(bsz, seqlen).mean(dim=-1)
             elif self._objective_mode == 3:
                 # print('3 is the objective...')
-                loss_fct = nn.CrossEntropyLoss(reduction='none')
+                loss_fct = nn.CrossEntropyLoss()
                 bsz, seqlen, vocab_size = shift_logits.shape
                 loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
                 seqlen_dim = max((shift_labels != -100).sum(dim=-1))
-                loss = loss.view(bsz, seqlen).sum(dim=-1) / seqlen_dim
+                loss = loss / seqlen_dim
             elif self._objective_mode == 4:
                 # print('4 is the objective...')
-                loss_fct = nn.CrossEntropyLoss(reduction='none')
+                loss_fct = nn.CrossEntropyLoss()
                 bsz, seqlen, vocab_size = shift_logits.shape
                 loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
                 seqlen_dim = (input_ids != 50256).sum(dim=-1)
-                loss = loss.view(bsz, seqlen).sum(dim=-1) / seqlen_dim
+                loss = loss / seqlen_dim
                 # assert False, "not implemented error, self._objective_mode == 4 "
 
 
 
             # OLD
-            # loss_fct = CrossEntropyLoss(reduction='none')
+            # loss_fct = CrossEntropyLoss()
             # bsz, seqlen, vocab_size = shift_logits.shape
             # loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
             # loss = loss.view(bsz, seqlen).mean(dim=-1)

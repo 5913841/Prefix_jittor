@@ -33,7 +33,7 @@ from jittor import nn
 import glob
 from .utils.tokenization_utils import PreTrainedTokenizer
 
-from ..transformers import (
+from transformers import (
     CONFIG_MAPPING,
     MODEL_WITH_LM_HEAD_MAPPING,
     AutoConfig, # 无需修改

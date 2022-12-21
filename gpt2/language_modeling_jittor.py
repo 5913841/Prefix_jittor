@@ -22,6 +22,7 @@ class LineByLineData2TextTextDataset(Dataset):
     """
 
     def __init__(self, tokenizer: PreTrainedTokenizer, file_path: str, block_size: int, bos_tok:str, eos_tok:str, lowdata_token:str):
+        super().__init__()
         assert os.path.isfile(file_path), f"Input file path {file_path} not found"
         # Here, we do not cache the features, operating under the assumption
         # that we will soon use fast multithreaded tokenizers from the
@@ -115,6 +116,7 @@ class LineByLineWebNLGTextDataset(Dataset):
     """
 
     def __init__(self, tokenizer: PreTrainedTokenizer, file_path: str, block_size: int, bos_tok:str, eos_tok:str):
+        super().__init__()
         assert os.path.isfile(file_path), f"Input file path {file_path} not found"
         # Here, we do not cache the features, operating under the assumption
         # that we will soon use fast multithreaded tokenizers from the
@@ -262,6 +264,11 @@ class DataCollatorForData2TextLanguageModeling:
         if isinstance(examples[0], (dict, BatchEncoding)):
             examples = [e["input_ids"] for e in examples]
         input_ids, labels, src, tgt, cate = zip(*examples)
+        input_ids = list(input_ids)
+        labels = list(labels)
+        src = list(src)
+        tgt = list(tgt)
+        cate = list(cate)
         if self.mlm:
             inputs, labels = self.mask_tokens(batch)
             return {"input_ids": inputs, "labels": labels}
@@ -336,7 +343,7 @@ class DataCollatorForData2TextLanguageModeling:
                     "You are attempting to pad samples but the tokenizer you are using"
                     f" ({self.tokenizer.__class__.__name__}) does not have one."
                 )
-            return pad_sequence(examples, batch_first=True, padding_value=self.tokenizer.pad_token_id)
+            return pad_sequence(examples, batch_first=True, padding_val=self.tokenizer.pad_token_id)
 
     def mask_tokens(self, inputs: jt.Var) -> Tuple[jt.Var, jt.Var]:
         """

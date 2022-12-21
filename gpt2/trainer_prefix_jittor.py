@@ -145,8 +145,7 @@ class Trainer_Prefix:
         # Will be set to True by `self._setup_loggers()` on first call to `self.log()`.
         self._loggers_initialized = False
         # Create output directory if needed
-        if self.is_world_process_zero():
-            os.makedirs(self.args.output_dir, exist_ok=True)
+        os.makedirs(self.args.output_dir, exist_ok=True)
         if not callable(self.data_collator) and callable(getattr(self.data_collator, "collate_batch", None)):
             self.data_collator = self.data_collator.collate_batch
             warnings.warn(
@@ -250,7 +249,7 @@ class Trainer_Prefix:
 
         # Data loader and number of training steps
         # ================ dataset loader ===============
-        self.train_dataset.batch_size = self.args.train_batch_size,
+        self.train_dataset.batch_size = self.args.train_batch_size
         self.train_dataset.sampler = self._get_train_sampler()
         self.train_dataset.collate_batch = self.data_collator
         self.train_dataset.drop_last = self.args.dataloader_drop_last
@@ -292,7 +291,7 @@ class Trainer_Prefix:
 
         # Train!
         total_train_batch_size = (
-            self.args.train_batch_size
+            self.args.per_device_train_batch_size
             * self.args.gradient_accumulation_steps
         )
         logger.info("***** Running training *****")
@@ -364,7 +363,7 @@ class Trainer_Prefix:
                     and (step + 1) == len(epoch_iterator)
                 ):
 
-                    self.optimizer.clip_grad_norm(model.parameters(), self.args.max_grad_norm)
+                    self.optimizer.clip_grad_norm(self.args.max_grad_norm)
                     self.optimizer.step()
 
                     # URGENT
@@ -587,7 +586,7 @@ class Trainer_Prefix:
 
 
         # print(loss)
-        loss.backward()
+        self.optimizer.backward(loss)
 
         # print('max allocated_memory:', torch.cuda.max_memory_allocated(0), 'total_memory:', torch.cuda.get_device_properties(0).total_memory,
         #       'percentage', torch.cuda.max_memory_allocated(0)/torch.cuda.get_device_properties(0).total_memory)

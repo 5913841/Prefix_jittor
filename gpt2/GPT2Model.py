@@ -71,8 +71,7 @@ def find_pruneable_heads_and_indices(
 
 
 def select_index(metrix: jt.Var, index: jt.Var, dim: int = 0) -> jt.Var:
-    return metrix.transpose(0,dim)[index].transpose(0,dim)
-
+    return metrix[(slice(),)*dim+(index,)]
 
 dict_obj = {
     # 'int64':{'min':t_finfo(t_int64).min,'max':t_finfo(t_int64).max, 'func':jt.int64},
@@ -202,7 +201,11 @@ class GPT2Attention(nn.Module):
         if not self.is_cross_attention:
             # if only "normal" attention layer implements causal mask
             mask = self.bias[:, :, ns - nd : ns, :ns]
-            w = jt.where(mask.bool(), w, finfo(str(w.dtype)).func(self.masked_bias))
+            # print(w.size())
+            # print(mask.bool().size())
+            # print(finfo(str(w.dtype)).func(self.masked_bias).size())
+            w = jt.where(mask.bool().repeat(w.size()[0],w.size()[1],1,1), w, finfo(str(w.dtype)).func(self.masked_bias))
+
 
         if attention_mask is not None:
             # Apply the attention mask
@@ -219,7 +222,7 @@ class GPT2Attention(nn.Module):
 
         if output_attentions:
             outputs.append(w)
-        return outputs
+        return tuple(outputs)
 
     def split_heads(self, x, k=False):
         """
@@ -363,7 +366,7 @@ class GPT2Block(nn.Module):
         hidden_states = residual + feed_forward_hidden_states
 
 
-        outputs = [hidden_states] + outputs
+        outputs = (hidden_states,) + outputs
         return outputs  # hidden_states, present, (attentions, cross_attentions)
 
 
