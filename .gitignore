@@ -4,3 +4,4 @@ gpt2/cache/
 gpt2/pretrained/
 gpt2/webnlg_models/
 gpt2/e2e_models/
+gpt2/save_e2e_models_convcheck
