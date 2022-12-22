@@ -2,3 +2,5 @@ gpt2/test.py
 gpt2/trainer_test.py
 gpt2/cache/
 gpt2/pretrained/
+gpt2/webnlg_models/
+gpt2/e2e_models/

@@ -81,6 +81,7 @@ class LineByLineData2TextTextDataset(Dataset):
                 temp_tgt_len += len(elem) - (sep_idx-1)
                 temp_count += 1
 
+        self.set_attrs(total_len=temp_count)
         print('tgt_avg: ', temp_tgt_len / temp_count)
         print('src_avg: ', temp_src_len / temp_count)
         print('ratios: ', temp_src_len/temp_tgt_len)
@@ -196,6 +197,7 @@ class LineByLineWebNLGTextDataset(Dataset):
 
 
 
+        self.set_attrs(total_len=temp_count)
 
         print(self.labels[0])
         print(self.examples[0])

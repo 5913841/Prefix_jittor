@@ -335,126 +335,138 @@ class Trainer_Prefix:
         logging_loss_scalar = 0.0
         # model.zero_grad()
         disable_tqdm = self.args.disable_tqdm or not self.is_local_process_zero()
-        train_pbar = trange(epochs_trained, int(np.ceil(num_train_epochs)), desc="Epoch", disable=disable_tqdm)
+        # train_pbar = trange(epochs_trained, int(np.ceil(num_train_epochs)), desc="Epoch", disable=disable_tqdm)
         for epoch in range(epochs_trained, int(np.ceil(num_train_epochs))):
 
             epoch_iterator = train_dataloader
+            ppl = None
+            train_loss = None
+            eval_loss = None
 
             # Reset the past mems state at the beginning of each epoch if necessary.
             if self.args.past_index >= 0:
                 self._past = None
+            with tqdm(total = epoch_iterator.__batch_len__()) as bar:
+            # epoch_pbar = tqdm(epoch_iterator, desc="Iteration", disable=disable_tqdm)
+                for step, inputs in enumerate(epoch_iterator):
 
-            epoch_pbar = tqdm(epoch_iterator, desc="Iteration", disable=disable_tqdm)
-            for step, inputs in enumerate(epoch_iterator):
+                    # Skip past any already trained steps if resuming training
+                    if steps_trained_in_current_epoch > 0:
+                        steps_trained_in_current_epoch -= 1
+                        # epoch_pbar.update(1)
+                        continue
 
-                # Skip past any already trained steps if resuming training
-                if steps_trained_in_current_epoch > 0:
-                    steps_trained_in_current_epoch -= 1
-                    epoch_pbar.update(1)
-                    continue
+                    train_loss = self.training_step(model, inputs)
+                    tr_loss += train_loss
 
-                tr_loss += self.training_step(model, inputs)
+                    self.total_flos += self.floating_point_ops(inputs)
 
-                self.total_flos += self.floating_point_ops(inputs)
-
-                if (step + 1) % self.args.gradient_accumulation_steps == 0 or (
-                    # last step in epoch but step is always smaller than gradient_accumulation_steps
-                    len(epoch_iterator) <= self.args.gradient_accumulation_steps
-                    and (step + 1) == len(epoch_iterator)
-                ):
-
-                    self.optimizer.clip_grad_norm(self.args.max_grad_norm)
-                    self.optimizer.step()
-
-                    # URGENT
-                    self.lr_scheduler.step()
-                    # model.zero_grad()
-                    self.global_step += 1
-                    self.epoch = epoch + (step + 1) / len(epoch_iterator)
-
-
-                    if (self.args.logging_steps > 0 and self.global_step % self.args.logging_steps == 0) or (
-                        self.global_step == 1 and self.args.logging_first_step
+                    if (step + 1) % self.args.gradient_accumulation_steps == 0 or (
+                        # last step in epoch but step is always smaller than gradient_accumulation_steps
+                        len(epoch_iterator) <= self.args.gradient_accumulation_steps
+                        and (step + 1) == len(epoch_iterator)
                     ):
-                        logs: Dict[str, float] = {}
-                        tr_loss_scalar = tr_loss.item()
-                        logs["loss"] = (tr_loss_scalar - logging_loss_scalar) / self.args.logging_steps
-                        # backward compatibility for pytorch schedulers
-                        logs["learning_rate"] = (
-                            self.lr_scheduler.get_last_lr()[0]
-                            # if version.parse(jt.__version__) >= version.parse("1.4")
-                            # else self.lr_scheduler.get_lr()[0]
-                        )
-                        logging_loss_scalar = tr_loss_scalar
 
-                        self.log(logs)
+                        self.optimizer.clip_grad_norm(self.args.max_grad_norm)
+                        self.optimizer.step()
 
-                    # print(self.args.evaluation_strategy == EvaluationStrategy.STEPS )
-                    # print(self.global_step % self.args.eval_steps == 0)
-                    # print()
+                        # URGENT
+                        self.lr_scheduler.step()
+                        # model.zero_grad()
+                        self.global_step += 1
+                        self.epoch = epoch + (step + 1) / len(epoch_iterator)
 
-                    if (
-                        self.args.evaluation_strategy == EvaluationStrategy.STEPS
-                        and self.global_step % self.args.eval_steps == 0
-                    ):
-                        metrics = self.evaluate()
 
-                        #############################EARLY STOPPING########################
-                        if 'lowdata' in self.args.output_dir or 'earlystop' in self.args.output_dir:
-                            self.save_based_on_eval = True
-                        else:
-                            self.save_based_on_eval = False
-                        print('if not see a line lowdata: below, then did not go into low data. ')
-                        if self.save_based_on_eval and metrics["eval_loss"] < self.curr_best_eval:
-                            print('lowdata:', self.global_step, self.curr_best_eval, metrics["eval_loss"],
-                                  'perplexity={}'.format(math.exp(metrics["eval_loss"])))
-                            self.curr_best_eval = metrics["eval_loss"]
+                        if (self.args.logging_steps > 0 and self.global_step % self.args.logging_steps == 0) or (
+                            self.global_step == 1 and self.args.logging_first_step
+                        ):
+                            logs: Dict[str, float] = {}
+                            tr_loss_scalar = tr_loss.item()
+                            logs["loss"] = (tr_loss_scalar - logging_loss_scalar) / self.args.logging_steps
+                            # backward compatibility for pytorch schedulers
+                            logs["learning_rate"] = (
+                                self.lr_scheduler.get_last_lr()[0]
+                                # if version.parse(jt.__version__) >= version.parse("1.4")
+                                # else self.lr_scheduler.get_lr()[0]
+                            )
+                            logging_loss_scalar = tr_loss_scalar
+                            self.tb_writer.add_scalar('loss/train_loss', logs['loss'], self.global_step)
+
+                            self.log(logs)
+
+                        # print(self.args.evaluation_strategy == EvaluationStrategy.STEPS )
+                        # print(self.global_step % self.args.eval_steps == 0)
+                        # print()
+
+                        if (
+                            self.args.evaluation_strategy == EvaluationStrategy.STEPS
+                            and self.global_step % self.args.eval_steps == 0
+                        ):
+                            metrics = self.evaluate()
+
+                            eval_loss = metrics["eval_loss"]
+                            ppl = math.exp(metrics["eval_loss"])
+                            self.tb_writer.add_scalar('loss/eval_loss', metrics["eval_loss"], self.global_step)
+                            self.tb_writer.add_scalar('ppl', ppl, self.global_step)
+                            #############################EARLY STOPPING########################
+                            if 'lowdata' in self.args.output_dir or 'earlystop' in self.args.output_dir:
+                                self.save_based_on_eval = True
+                            else:
+                                self.save_based_on_eval = False
+                            tqdm.write('if not see a line lowdata: below, then did not go into low data. ')
+                            if self.save_based_on_eval and metrics["eval_loss"] < self.curr_best_eval:
+                                tqdm.write('lowdata:', self.global_step, self.curr_best_eval, metrics["eval_loss"],
+                                    'perplexity={}'.format(math.exp(metrics["eval_loss"])))
+                                self.curr_best_eval = metrics["eval_loss"]
+
+                                if hasattr(model, "module"):
+                                    assert (
+                                            model.module is self.model
+                                    ), f"Module {model.module} should be a reference to self.model"
+                                else:
+                                    assert model is self.model, f"Model {model} should be a reference to self.model"
+                                # Save model checkpoint
+                                output_dir_name = os.path.basename(self.args.output_dir)
+                                checkpoint_folder = f"{output_dir_name}-{PREFIX_CHECKPOINT_DIR}-{self.global_step}"
+                                output_dir = os.path.join(self.args.output_dir, checkpoint_folder)
+
+                                self.store_flos()
+                                tqdm.write('saving to output_dir', output_dir)
+                                self.save_model(output_dir)
+
+                                self._rotate_checkpoints(use_mtime=True)
+                            #####################################################
+
+                        if self.args.save_steps > 0 and self.global_step % self.args.save_steps == 0:
+                            tqdm.write('saving model at a checkpoint!!')
+                            # In all cases (even distributed/parallel), self.model is always a reference
+                            # to the model we want to save.
                             if hasattr(model, "module"):
                                 assert (
-                                        model.module is self.model
+                                    model.module is self.model
                                 ), f"Module {model.module} should be a reference to self.model"
                             else:
                                 assert model is self.model, f"Model {model} should be a reference to self.model"
                             # Save model checkpoint
-                            output_dir_name = os.path.basename(self.args.output_dir)
-                            checkpoint_folder = f"{output_dir_name}-{PREFIX_CHECKPOINT_DIR}-{self.global_step}"
+                            checkpoint_folder = f"{PREFIX_CHECKPOINT_DIR}-{self.global_step}"
                             output_dir = os.path.join(self.args.output_dir, checkpoint_folder)
 
                             self.store_flos()
-                            print('saving to output_dir', output_dir)
+
                             self.save_model(output_dir)
-
                             self._rotate_checkpoints(use_mtime=True)
-                        #####################################################
 
-                    if self.args.save_steps > 0 and self.global_step % self.args.save_steps == 0:
-                        print('saving model at a checkpoint!!')
-                        # In all cases (even distributed/parallel), self.model is always a reference
-                        # to the model we want to save.
-                        if hasattr(model, "module"):
-                            assert (
-                                model.module is self.model
-                            ), f"Module {model.module} should be a reference to self.model"
-                        else:
-                            assert model is self.model, f"Model {model} should be a reference to self.model"
-                        # Save model checkpoint
-                        checkpoint_folder = f"{PREFIX_CHECKPOINT_DIR}-{self.global_step}"
-                        output_dir = os.path.join(self.args.output_dir, checkpoint_folder)
+                            jt.save(self.optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
+                            jt.save(self.lr_scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
 
-                        self.store_flos()
-
-                        self.save_model(output_dir)
-                        self._rotate_checkpoints(use_mtime=True)
-
-
-                        jt.save(self.optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
-                        jt.save(self.lr_scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
-
-                epoch_pbar.update(1)
-                if self.args.max_steps > 0 and self.global_step >= self.args.max_steps:
-                    break
-            epoch_pbar.close()
-            train_pbar.update(1)
+                    bar.set_description('Epoch %i' % epoch)
+                    bar.set_postfix(train_loss = train_loss.item(), eval_loss = eval_loss,ppl = ppl )
+                    bar.update(1)
+                    # epoch_pbar.update(1)
+                    if self.args.max_steps > 0 and self.global_step >= self.args.max_steps:
+                        break
+                # epoch_pbar.close()
+                # train_pbar.update(1)
 
             if self.args.evaluation_strategy == EvaluationStrategy.EPOCH:
                 metrics = self.evaluate()
@@ -462,7 +474,7 @@ class Trainer_Prefix:
             if self.args.max_steps > 0 and self.global_step >= self.args.max_steps:
                 break
 
-        train_pbar.close()
+        # train_pbar.close()
         if self.tb_writer:
             self.tb_writer.close()
         if self.args.past_index and hasattr(self, "_past"):
@@ -522,12 +534,12 @@ class Trainer_Prefix:
                     )
             self.tb_writer.flush()
         output = {**logs, **{"step": self.global_step}}
-        if self.is_world_process_zero():
-            self.log_history.append(output)
+        # if self.is_world_process_zero():
+        self.log_history.append(output)
         if iterator is not None:
             iterator.write(output)
         else:
-            print(output)
+            tqdm.write(str(output))
 
     def _prepare_inputs(self, inputs: Dict[str, Union[jt.Var, Any]]) -> Dict[str, Union[jt.Var, Any]]:
         """
@@ -773,7 +785,7 @@ class Trainer_Prefix:
         # ================= eval dataloader =================
         my_eval_dataset = eval_dataset if eval_dataset is not None else self.eval_dataset
         my_eval_dataset.batch_size = self.args.eval_batch_size
-        my_eval_dataset.sampler = self._get_eval_sampler()
+        my_eval_dataset.sampler = self._get_eval_sampler(eval_dataset=my_eval_dataset)
         my_eval_dataset.num_workers = self.args.dataloader_num_workers
         my_eval_dataset.drop_last = self.args.dataloader_drop_last
         my_eval_dataset.collate_batch = self.data_collator
@@ -814,7 +826,7 @@ class Trainer_Prefix:
         """
 
         test_dataset.batch_size = self.args.eval_batch_size
-        test_dataset.sampler = self._get_eval_sampler()
+        test_dataset.sampler = self._get_eval_sampler(eval_dataset=test_dataset)
         test_dataset.collate_batch = self.data_collator
         test_dataset.drop_last = self.args.dataloader_drop_last
 
@@ -865,8 +877,8 @@ class Trainer_Prefix:
         if self.gpt2 is not None:
             self.gpt2.eval()
 
-        print(model.is_training())
-        print(self.gpt2.is_training())
+        tqdm.write(str(model.is_training()))
+        tqdm.write(str(self.gpt2.is_training()))
 
 
         if self.args.past_index >= 0:
@@ -922,7 +934,7 @@ class Trainer_Prefix:
                 metrics[f"eval_{key}"] = metrics.pop(key)
         if len(entropy_losses) > 0:
             metrics['entropy'] = np.mean(entropy_losses)
-            print('entropy', metrics['entropy'] )
+            tqdm.write('entropy', metrics['entropy'] )
 
         return PredictionOutput(predictions=preds, label_ids=label_ids, metrics=metrics)
 
