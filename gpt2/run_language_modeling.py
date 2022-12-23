@@ -510,6 +510,10 @@ def main():
 
     parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+
+
+    jt.flags.use_cuda=True
+
     print("line_by_line", data_args.line_by_line)
     if data_args.eval_data_file is None and training_args.do_eval:
         raise ValueError(

@@ -33,4 +33,5 @@ python3 run_language_modeling.py --output_dir=save_e2e_models_convcheck/data2tex
                 --objective_mode 1 \
                 --evaluate_during_training \
                 --eval_steps 100  \
-                --cache_dir cache/gpt2-medium-e2e 
+                --cache_dir cache/gpt2-medium-e2e \
+                --logging_steps 100

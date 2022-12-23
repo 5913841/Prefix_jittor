@@ -34,3 +34,4 @@ python3 run_language_modeling.py --output_dir=webnlg_models/webnlgprefixtune_y_5
                 --evaluate_during_training \
                 --eval_steps 100 \
                 --cache_dir cache/gpt2-medium-webnlg
+                --logging_steps 100
