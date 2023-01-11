@@ -8,6 +8,10 @@ gpt2/e2e_models/
 gpt2/save_e2e_models_convcheck/
 *.txt
 *.log
+*.pt
+*.pkl
+*.bin
+*.zip
 models/
 bert/pretrained/
 bert/cache/
