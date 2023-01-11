@@ -125,8 +125,8 @@ class LineByLineWebNLGTextDataset(Dataset):
         logger.info("Creating features from dataset file at %s", file_path)
 
 
-        with open(file_path,encoding='utf-8') as f:
-            lines_dict = json.load(f,)
+        with open(file_path) as f:
+            lines_dict = json.load(f)
 
         full_rela_lst = []
         full_src_lst = []

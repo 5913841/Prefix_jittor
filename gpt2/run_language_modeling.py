@@ -19,7 +19,7 @@ GPT, GPT-2 and CTRL are fine-tuned using a causal language modeling (CLM) loss. 
 using a masked language modeling (MLM) loss. XLNet is fine-tuned using a permutation language modeling (PLM) loss.
 """
 import logging
-import os
+import os;os.environ['disable_lock']='1'
 from dataclasses import dataclass, field
 from typing import Optional
 from train_control import PrefixTuning, PrefixEmbTuning, GPT2LMHeadModel
@@ -512,7 +512,7 @@ def main():
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
 
-    # jt.flags.use_cuda=True
+    jt.flags.use_cuda=True
 
     print("line_by_line", data_args.line_by_line)
     if data_args.eval_data_file is None and training_args.do_eval:

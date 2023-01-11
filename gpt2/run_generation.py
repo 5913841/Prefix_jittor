@@ -207,7 +207,7 @@ def read_sum_files(path, tokenizer, max_source_length, max_target_length):
 def read_webnlg_files(path, tokenizer):
     file_dict = {}
 
-    with open(path, encoding='utf-8') as f:
+    with open(path) as f:
         lines_dict = json.load(f)
 
     full_rela_lst = []
@@ -256,7 +256,7 @@ def read_webnlg_files(path, tokenizer):
 
 def write_e2e_corr(prompt_lst, file_dict, corr_path):
     print(len(prompt_lst))
-    with open(corr_path, 'w',encoding='utf-8') as f:
+    with open(corr_path, 'w') as f:
         for x in prompt_lst:
             for line in file_dict[x]:
                 if not line.strip():
@@ -287,7 +287,7 @@ def write_e2e_corr(prompt_lst, file_dict, corr_path):
     return
 
 def write_e2e_src(prompt_lst, corr_path):
-    with open(corr_path, 'w', encoding='utf-8') as f:
+    with open(corr_path, 'w') as f:
         for x in prompt_lst:
             print(x, file=f)
     return
@@ -806,7 +806,7 @@ def main():
 
                 mode = args.format_mode
 
-                print(mode)
+                # print(mode)
 
                 if mode == 'cat':
                     cc = src_cat
@@ -834,10 +834,10 @@ def main():
                     control_code = None
             elif args.task_mode == 'webnlg' or args.task_mode == 'triples':
                 src = prompt_text_lst[prompt_idx].split()[:-1]
-                print(src)
+                # print(src)
                 src = ' '.join(src)
                 cat = prompt_rela_lst[prompt_idx]
-                print(cat)
+                # print(cat)
                 src_cat = tokenizer(cat, add_special_tokens=True, truncation=True, is_split_into_words=True)['input_ids']
                 src = tokenizer(src, add_special_tokens=True, truncation=True, is_split_into_words=False)['input_ids']
 
@@ -861,7 +861,7 @@ def main():
                 
                 mode = args.format_mode
 
-                print(mode)
+                # print(mode)
 
                 if mode == 'cat':
                     cc = src_cat
@@ -869,7 +869,7 @@ def main():
                     cc = src
                 elif mode == 'infix':
                     cc = src
-                print('control code is ', cc)
+                # print('control code is ', cc)
 
                 if mode == 'nopeek' or mode == 'infix':
                     input_pp = tokenizer.bos_token
@@ -890,17 +890,17 @@ def main():
 
             else:
                 control_code = None
-                print('control code is None')
+                # print('control code is None')
 
             if args.format_mode != 'infix':
-                print(config.optim_prefix, optim_prefix_bool)
-                print('control code is ', control_code)
+                # print(config.optim_prefix, optim_prefix_bool)
+                # print('control code is ', control_code)
                 prompt = model.get_prompt(control_code, gpt2=gpt2, bsz=1)
             else:
-                print(control_code)
-                print(src)
+                # print(control_code)
+                # print(src)
                 src = src.long().unsqueeze(0)
-                print(input_ids)
+                # print(input_ids)
                 prompt = model.get_prompt(src, None, gpt2=gpt2, bsz=1) #src, control_code=None, gpt2=None, bsz=None, attn_mask=None
 
 
@@ -913,7 +913,7 @@ def main():
             # print(input_ids.shape)
 
             # assert control_code is None
-            print(decode_mode)
+            # print(decode_mode)
             input_ids = jt.from_torch(input_ids)
             if decode_mode == 'nucleus':
                 output_sequences = model.generate(
@@ -924,7 +924,7 @@ def main():
                     decode_strategy = 'top-p',
                     top_k=args.k,
                     gpt2 = gpt2,
-                    top_p=0.4,
+                    top_p=0.7,
                 )
             elif decode_mode == 'beam':
                 ############################
@@ -941,10 +941,10 @@ def main():
                     maxlen=args.length + len(encoded_prompt[0]),
                     temperature=args.temperature,
                     decode_strategy = 'top-p',
-                    # tokenizer = tokenizer,
+                    tokenizer = tokenizer,
                     top_k=args.k,
                     gpt2 = gpt2,
-                    top_p=0.4,
+                    top_p=0.7,
                 )
                 # print(output_sequences)
 
@@ -957,7 +957,7 @@ def main():
                     decode_strategy = 'top-p',
                     top_k=args.k,
                     gpt2 = gpt2,
-                    top_p=0.4,
+                    top_p=0.7,
                 )
 
 
@@ -971,7 +971,7 @@ def main():
 
         if QUICK_CHECK:
             for generated_sequence_idx, generated_sequence in enumerate(output_sequences):
-                print("=== GENERATED SEQUENCE {} ===".format(generated_sequence_idx + 1))
+                print("=== GENERATED SEQUENCE {} ===".format(prompt_idx + 1))
                 # args.stop_token = tokenizer.eos_token
                 generated_sequence = generated_sequence.tolist()
 
@@ -987,34 +987,38 @@ def main():
                 )
 
                 # generated_sequences.append(total_sequence)
-                print(total_sequence)
+                # print(total_sequence)
                 
         else:
             for generated_sequence_idx, generated_sequence in enumerate(output_sequences):
-                print("=== GENERATED SEQUENCE {} ===".format(generated_sequence_idx + 1))
-                # args.stop_token = tokenizer.eos_token
-                generated_sequence = generated_sequence.tolist()
-
-                # Decode text
+                print("=== GENERATED SEQUENCE {} ===".format(prompt_idx + 1))
+                generated_sequence = generated_sequence.tolist()[input_ids.shape[1]-1:-1]
                 text = tokenizer.decode(generated_sequence, clean_up_tokenization_spaces=True)
-
                 print(text)
-                text_output = text[len(tokenizer.decode(encoded_prompt[0], clean_up_tokenization_spaces=True)):]
-                idx = text_output.find(tokenizer.eos_token)
-                if idx >= 0:
-                    text_output = text_output[:idx]
-                text_output = text_output.strip()
 
-                if args.task_mode == 'topic' or args.task_mode == 'sentiment':
-                    text_output = prompt_text + ' ' + text_output + ' [SPECIAL_END]'
+                # # args.stop_token = tokenizer.eos_token
+                # generated_sequence = generated_sequence.tolist()
+
+                # # Decode text
+                # text = tokenizer.decode(generated_sequence, clean_up_tokenization_spaces=True)
+
+                # # print(text)
+                # text_output = text[len(tokenizer.decode(encoded_prompt[0], clean_up_tokenization_spaces=True)):]
+                # idx = text_output.find(tokenizer.eos_token)
+                # if idx >= 0:
+                #     text_output = text_output[:idx]
+                # text_output = text_output.strip()
+
+                # if args.task_mode == 'topic' or args.task_mode == 'sentiment':
+                #     text_output = prompt_text + ' ' + text_output + ' [SPECIAL_END]'
 
 
 
-                if text_output:
-                    print(text_output, file=out_handle)
-                    print(text_output)
-                else:
-                    print('Error', file=out_handle)
+                # if text_output:
+                #     print(text_output, file=out_handle)
+                #     print(text_output)
+                # else:
+                #     print('Error', file=out_handle)
 
         print()
 

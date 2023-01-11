@@ -802,36 +802,34 @@ class Trainer_Prefix:
 
 
         eval_dataloader = my_eval_dataset
-
         output = self.prediction_loop(eval_dataloader, description="Evaluation")
 
-        for i in range(len(eval_dataloader)):
-            srclen = 0; 
-            while(eval_dataloader[i][1][srclen]==-100):srclen+=1
-            inputs = eval_dataloader[i][0][0:srclen].unsqueeze(0)
-            append_len = srclen + self.model.preseqlen
-            output_sequences = self.model.generate(
-                input_ids=inputs,
-                # past_key_values=prompt,
-                maxlen=100+append_len,
-                temperature=0.5,
-                tokenizer = self.tokenizer,
-                decode_strategy = 'top-p',
-                top_k=50267,
-                gpt2 = self.gpt2,
-                top_p=0.9,
-            )
-            tokenizer = self.tokenizer
-            for generated_sequence_idx, generated_sequence in enumerate(output_sequences):
-                generated_sequence = generated_sequence.tolist()
-                text = tokenizer.decode(generated_sequence, clean_up_tokenization_spaces=True)
-                text_output = text[len(tokenizer.decode(append_len, clean_up_tokenization_spaces=True)):]
-                idx = text_output.find(tokenizer.eos_token)
-                if idx >= 0:
-                    text_output = text_output[:idx]
-                text_output = text_output.strip()
-                print(text_output)
-
+        # for i in range(len(eval_dataloader)):
+        #     srclen = 0; 
+        #     while(eval_dataloader[i][1][srclen]==-100):srclen+=1
+        #     inputs = eval_dataloader[i][0][0:srclen].unsqueeze(0)
+        #     append_len = srclen + self.model.preseqlen
+        #     output_sequences = self.model.generate(
+        #         input_ids=inputs,
+        #         # past_key_values=prompt,
+        #         maxlen=100+append_len,
+        #         temperature=0.5,
+        #         tokenizer = self.tokenizer,
+        #         decode_strategy = 'top-p',
+        #         top_k=50267,
+        #         gpt2 = self.gpt2,
+        #         top_p=0.9,
+        #     )
+        #     tokenizer = self.tokenizer
+        #     for generated_sequence_idx, generated_sequence in enumerate(output_sequences):
+        #         generated_sequence = generated_sequence.tolist()
+        #         text = tokenizer.decode(generated_sequence, clean_up_tokenization_spaces=True)
+        #         text_output = text[len(tokenizer.decode(append_len, clean_up_tokenization_spaces=True)):]
+        #         idx = text_output.find(tokenizer.eos_token)
+        #         if idx >= 0:
+        #             text_output = text_output[:idx]
+        #         text_output = text_output.strip()
+        #         print(text_output)
 
 
         self.log(output.metrics)
