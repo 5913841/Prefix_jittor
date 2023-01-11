@@ -1,10 +1,13 @@
 gpt2/test.py
 gpt2/trainer_test.py
 gpt2/cache/
-pretrained/
+gpt2/pretrained/
+gpt2/examples/
 gpt2/webnlg_models/
 gpt2/e2e_models/
-gpt2/save_e2e_models_convcheck
+gpt2/save_e2e_models_convcheck/
 *.txt
 *.log
 models/
+bert/pretrained/
+bert/cache/
