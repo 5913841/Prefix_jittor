@@ -56,9 +56,9 @@ _use_apex = False
 EPS = 1e-12
 INIT_GUMBEL_TEMP = 5.0
 
-def select_index(metrix: jt.Var, index: jt.Var, dim: int = 0) -> jt.Var:
-    return metrix.transpose(0,dim)[index].transpose(0,dim)
 
+def select_index(metrix: jt.Var, index: jt.Var, dim: int = 0) -> jt.Var:
+    return metrix[(slice(None),)*dim+(index,)]
 
 control_lst = ['positive', 'negative', 'neutral']
 Control_Temp = {'positive': 3967, 'negative':4633, 'neutral':8500}
@@ -350,6 +350,12 @@ class Trainer_Prefix:
             # epoch_pbar = tqdm(epoch_iterator, desc="Iteration", disable=disable_tqdm)
                 for step, inputs in enumerate(epoch_iterator):
 
+                    # print([self.tokenizer.decode(i) for i in inputs['input_ids'].data])
+                    # labels = np.copy(inputs['labels'].data)
+                    # labels[labels==-100] = 50257
+                    # print([self.tokenizer.decode(i) for i in labels])
+                    # print([self.tokenizer.decode(i) for i in inputs['src'].data])
+
                     # Skip past any already trained steps if resuming training
                     if steps_trained_in_current_epoch > 0:
                         steps_trained_in_current_epoch -= 1
@@ -368,6 +374,9 @@ class Trainer_Prefix:
                     ):
 
                         self.optimizer.clip_grad_norm(self.args.max_grad_norm)
+                        # print([(name,p.requires_grad) for name, p in self.model.named_parameters()])
+                        # print('=======================================================================')
+                        # print([(name,p.requires_grad) for name, p in self.gpt2.named_parameters()])
                         self.optimizer.step()
 
                         # URGENT
@@ -384,11 +393,11 @@ class Trainer_Prefix:
                             tr_loss_scalar = tr_loss.item()
                             logs["loss"] = (tr_loss_scalar - logging_loss_scalar) / self.args.logging_steps
                             # backward compatibility for pytorch schedulers
-                            logs["learning_rate"] = (
-                                self.lr_scheduler.get_last_lr()[0]
-                                # if version.parse(jt.__version__) >= version.parse("1.4")
-                                # else self.lr_scheduler.get_lr()[0]
-                            )
+                            # logs["learning_rate"] = (
+                            #     self.lr_scheduler.get_last_lr()[0]
+                            #     # if version.parse(jt.__version__) >= version.parse("1.4")
+                            #     # else self.lr_scheduler.get_lr()[0]
+                            # )
                             logging_loss_scalar = tr_loss_scalar
                             self.tb_writer.add_scalar('loss/train_loss', logs['loss'], self.global_step)
 
@@ -795,6 +804,35 @@ class Trainer_Prefix:
         eval_dataloader = my_eval_dataset
 
         output = self.prediction_loop(eval_dataloader, description="Evaluation")
+
+        for i in range(len(eval_dataloader)):
+            srclen = 0; 
+            while(eval_dataloader[i][1][srclen]==-100):srclen+=1
+            inputs = eval_dataloader[i][0][0:srclen].unsqueeze(0)
+            append_len = srclen + self.model.preseqlen
+            output_sequences = self.model.generate(
+                input_ids=inputs,
+                # past_key_values=prompt,
+                maxlen=100+append_len,
+                temperature=0.5,
+                tokenizer = self.tokenizer,
+                decode_strategy = 'top-p',
+                top_k=50267,
+                gpt2 = self.gpt2,
+                top_p=0.9,
+            )
+            tokenizer = self.tokenizer
+            for generated_sequence_idx, generated_sequence in enumerate(output_sequences):
+                generated_sequence = generated_sequence.tolist()
+                text = tokenizer.decode(generated_sequence, clean_up_tokenization_spaces=True)
+                text_output = text[len(tokenizer.decode(append_len, clean_up_tokenization_spaces=True)):]
+                idx = text_output.find(tokenizer.eos_token)
+                if idx >= 0:
+                    text_output = text_output[:idx]
+                text_output = text_output.strip()
+                print(text_output)
+
+
 
         self.log(output.metrics)
 

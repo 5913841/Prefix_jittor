@@ -512,7 +512,7 @@ def main():
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
 
-    jt.flags.use_cuda=True
+    # jt.flags.use_cuda=True
 
     print("line_by_line", data_args.line_by_line)
     if data_args.eval_data_file is None and training_args.do_eval:
@@ -743,6 +743,10 @@ def main():
         )
     else:
         print("task mode error 2")
+
+    for i in range(10):
+        print(train_dataset[i])
+
 
     if (model_args.tuning_mode == 'prefixtune'):
 

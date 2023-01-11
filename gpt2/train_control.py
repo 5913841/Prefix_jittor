@@ -3,11 +3,13 @@ from typing import Optional, Tuple, Union
 import warnings
 import jittor as jt
 from modeloutput import CausalLMOutputWithCrossAttentions, CausalLMOutputWithPast
-from pretrainedmodel import GPT2PreTrainedModel
+from pretrainedmodel import GPT2PreTrainedModel, PreTrainedModel
 from jittor import nn
-from gpt2model import GPT2Model
+from gpt2model import GPT2Model, finfo
+import numpy as np
+import torch
 
-class PrefixTuning(GPT2PreTrainedModel):
+class PrefixTuning(PreTrainedModel):
     """Classification Head for  transformer encoders"""
     def __init__(self, config, model_gpt2, optim_prefix=False, preseqlen=5, use_infix=False, deep_param=False):
         super().__init__(config)
@@ -173,7 +175,7 @@ class PrefixTuning(GPT2PreTrainedModel):
         ###### NUM PARAMS #########
         total_param = 0
         for name, param in self.named_parameters():
-            print(param.shape)
+            print(f"{name} : {param.shape}")
             total_param += param.numel()
         print('total param is {}'.format(total_param))
 
@@ -309,7 +311,8 @@ class PrefixTuning(GPT2PreTrainedModel):
         else:
             past_key_values_prompt = self.get_prompt(control_code, gpt2=gpt2_model, bsz=bsz)
         if past_key_values is not None:
-            assert False, "Attention, use past_key_values for other things"
+            # assert False, "Attention, use past_key_values for other things"
+            pass
         else:
             past_key_values = past_key_values_prompt
 
@@ -327,6 +330,74 @@ class PrefixTuning(GPT2PreTrainedModel):
                            return_dict=return_dict, **kwargs)
 
         return output
+
+    def generate(
+        self,
+        input_ids,
+        maxlen,
+        decode_strategy,
+        temperature,
+        gpt2,
+        past_key_values = None,
+        top_p = 0.1,
+        top_k = 50267
+    ):
+        self.eval()
+        allgen = []
+        with jt.no_grad():
+            past_key_values = past_key_values
+            output_ids = input_ids
+            for i in range(maxlen):
+                outputs = self(input_ids,return_dict = True, past_key_values=past_key_values,gpt2_model = gpt2, use_cache=True)
+                logits = outputs.logits
+                past_key_values = outputs.past_key_values
+                logits = logits[:, -1, :] / temperature
+                sorted_indices, sorted_logits = jt.argsort(logits, descending=True)
+                cumulative_probs = jt.cumsum(nn.softmax(sorted_logits.float32(), dim=-1), dim=-1)
+
+                if decode_strategy == "top-p":
+                    # implement top-p sampling
+
+                    # Remove tokens with cumulative probability above the threshold
+                    sorted_indices_to_remove = cumulative_probs > top_p
+                    # Shift the indices to the right to keep also the first token above the threshold
+                    sorted_indices_to_remove[:, 1:] = sorted_indices_to_remove[:, :-1].clone()
+                    sorted_indices_to_remove[:, 0] = 0
+                    sorted_indices = (sorted_indices + jt.arange(sorted_indices.shape[0], dtype=jt.int32).unsqueeze(-1) * sorted_indices.shape[1])
+
+                    indices_to_remove = sorted_indices[sorted_indices_to_remove]
+                    logits = logits.reshape(-1)
+                    logits = jt.index_fill_(logits.data, 0, indices_to_remove, -float("max"))
+                    logits = logits.reshape(sorted_indices.shape[0], sorted_indices.shape[1])
+
+                elif decode_strategy == "top-k":
+                    # implement top-k sampling
+                    sorted_indices_to_remove = jt.concat((jt.zeros((sorted_indices.size()[0],top_k)),jt.ones((sorted_indices.size()[0],sorted_indices.size()[1]-top_k))),dim=1)==1
+                    sorted_indices = (sorted_indices + jt.arange(sorted_indices.shape[0], dtype=torch.int32).unsqueeze(-1) * sorted_indices.shape[1])
+
+                    indices_to_remove = sorted_indices[sorted_indices_to_remove]
+                    logits = logits.reshape(-1)
+                    logits = jt.index_fill_(logits, 0, indices_to_remove, -float("inf"))
+                    logits = logits.reshape(sorted_indices.shape[0], sorted_indices.shape[1])
+                prob = nn.softmax(logits.float32(),dim=-1) # shape: (batch_size, num_vocabs)
+                now_token = jt.multinomial(prob, 1)[:, :1] # shape: (batch_size)
+
+                output_ids = jt.concat([torch.tensor(output_ids.data), now_token], 1)
+                # now_token = jt.from_torch(now_token)
+                # output_ids = jt.from_torch(output_ids)
+                input_ids = now_token
+            allgen += output_ids.numpy().tolist()
+        pro_allgen = []
+        for gen in allgen:
+            pro_allgen.append([])
+            for idx in gen[1:]:
+                # if idx == PAD_ID:
+                #     break
+                pro_allgen[-1].append(idx)
+        self.train() # return to training mode
+        return jt.Var(pro_allgen)
+
+
 
 
     def forward_infix(self,
@@ -940,7 +1011,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
         )
         hidden_states = transformer_outputs[0]
 
-        lm_logits = self.lm_head(hidden_states)
+        lm_logits = finfo(str(hidden_states.dtype)).func(self.lm_head(hidden_states))
 
         loss = None
         split_loss = None
@@ -984,7 +1055,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
             if self._objective_mode == 0:
                 # print('0 is the objective...')
                 # Flatten the tokens
-                loss_fct = nn.CrossEntropyLoss()
+                loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
                 loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
                 # loss_fct = CrossEntropyLoss(reduction='none')
                 # bsz, seqlen, vocab_size = shift_logits.shape
@@ -993,33 +1064,44 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
                 # loss = loss.view(bsz, seqlen).sum(dim=-1) / seqlen_dim
             elif self._objective_mode == 1:
                 # print('1 is the objective...')
-                loss_fct = nn.CrossEntropyLoss()
                 bsz, seqlen, vocab_size = shift_logits.shape
-                loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+                pad_mask = (1.- ((jt.equal(shift_labels, -100).float() + jt.equal(shift_labels, 50257).float()) > 0).float())
+                # pad_mask[...,1:] = pad_mask[...,:-1].clone()
+                # pad_mask[...,0] = 1.
+                shape = shift_labels.size()
+                loss = nn.cross_entropy_loss(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1),reduction='none')
+                loss = jt.mean(jt.sum(loss.view(shape) * pad_mask, dim=1) / (jt.sum(pad_mask, dim=1) + 1e-20))
                 # loss = loss.view(bsz, seqlen).sum(dim=-1)
             elif self._objective_mode == 2:
                 # print('2 is the objective...')
-                loss_fct = nn.CrossEntropyLoss()
+                loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
                 bsz, seqlen, vocab_size = shift_logits.shape
                 loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
                 # loss = loss.view(bsz, seqlen).mean(dim=-1)
             elif self._objective_mode == 3:
                 # print('3 is the objective...')
-                loss_fct = nn.CrossEntropyLoss()
+                loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
                 bsz, seqlen, vocab_size = shift_logits.shape
                 loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
                 seqlen_dim = max((shift_labels != -100).sum(dim=-1))
                 loss = loss / seqlen_dim
             elif self._objective_mode == 4:
                 # print('4 is the objective...')
-                loss_fct = nn.CrossEntropyLoss()
+                loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
                 bsz, seqlen, vocab_size = shift_logits.shape
                 loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
                 seqlen_dim = (input_ids != 50256).sum(dim=-1)
                 loss = loss / seqlen_dim
                 # assert False, "not implemented error, self._objective_mode == 4 "
 
-
+            # print(nn.softmax(shift_logits,-1)[shift_labels]*pad_mask)
+            # poss = nn.softmax(shift_logits,-1)
+            # show_var = jt.zeros(shift_labels.size())
+            # for i in range(shift_labels.size()[0]):
+            #     for j in range(shift_labels.size()[1]):
+            #         if(shift_labels[i,j]>0):
+            #             show_var[i][j] = poss[i,j,shift_labels[i,j]]
+            # print(show_var*pad_mask)
 
             # OLD
             # loss_fct = CrossEntropyLoss()
@@ -1107,7 +1189,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
         )
         hidden_states = transformer_outputs[0]
 
-        lm_logits = self.lm_head(hidden_states)
+        lm_logits = finfo(str(hidden_states.dtype)).func(self.lm_head(hidden_states))
 
         loss = None
         if labels is not None:

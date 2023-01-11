@@ -18,6 +18,7 @@
 """
 
 
+import os;os.environ['disable_lock']='1'
 import argparse
 import logging
 
@@ -206,7 +207,7 @@ def read_sum_files(path, tokenizer, max_source_length, max_target_length):
 def read_webnlg_files(path, tokenizer):
     file_dict = {}
 
-    with open(path) as f:
+    with open(path, encoding='utf-8') as f:
         lines_dict = json.load(f)
 
     full_rela_lst = []
@@ -255,7 +256,7 @@ def read_webnlg_files(path, tokenizer):
 
 def write_e2e_corr(prompt_lst, file_dict, corr_path):
     print(len(prompt_lst))
-    with open(corr_path, 'w') as f:
+    with open(corr_path, 'w',encoding='utf-8') as f:
         for x in prompt_lst:
             for line in file_dict[x]:
                 if not line.strip():
@@ -286,7 +287,7 @@ def write_e2e_corr(prompt_lst, file_dict, corr_path):
     return
 
 def write_e2e_src(prompt_lst, corr_path):
-    with open(corr_path, 'w') as f:
+    with open(corr_path, 'w', encoding='utf-8') as f:
         for x in prompt_lst:
             print(x, file=f)
     return
@@ -304,6 +305,7 @@ def adjust_length_to_model(length, max_sequence_length):
 
 
 def main():
+    jt.flags.use_cuda = True
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model_type",
@@ -410,7 +412,7 @@ def main():
         config._my_arg_task_mode = args.task_mode
         config._objective_mode = args.objective_mode
         model = model_class.from_pretrained(args.model_name_or_path, config=config, cache_dir=args.cache_dir)
-
+        # model = model_class(config)
         print(len(tokenizer), tokenizer.bos_token, tokenizer.eos_token, tokenizer.pad_token)
 
         # TODO LISA
@@ -483,7 +485,8 @@ def main():
                     model_gpt2=gpt2, optim_prefix=optim_prefix_bool, preseqlen=args.preseqlen,
                     use_infix=(args.format_mode == 'infix')
                 )
-            #
+                # model = PrefixTuning(config=config,model_gpt2=gpt2)
+
 
 
         else:
@@ -540,13 +543,13 @@ def main():
 
         else:
             if ('lowdata' in args.model_name_or_path) or (args.prefixModel_name_or_path is not None and 'lowdata' in args.prefixModel_name_or_path):
-                test_path = '/u/scr/xlisali/e2e_data/src1_valid.txt'
+                test_path = '../data/e2e_data/src1_valid.txt'
             else:
 
                 if args.eval_dataset == 'valid':
-                    test_path = '/u/scr/xlisali/e2e_data/src1_valid.txt'
+                    test_path = '../data/e2e_data/src1_valid.txt'
                 elif args.eval_dataset == 'test':
-                    test_path = '/u/scr/xlisali/e2e_data/src1_test.txt'
+                    test_path = '../data/e2e_data/src1_test.txt'
 
             print('using the test path ', test_path)
             if args.prefixModel_name_or_path is not None:
@@ -565,18 +568,21 @@ def main():
             prompt_text_lst = list(prompt_text_dict.keys())
             split_file = args.eval_dataset
             decode_mode = 'beam'
-            curr_dir = os.path.join('/u/scr/xlisali/contrast_LM/transformers/examples/text-generation/',
+            curr_dir = os.path.join('examples/text-generation/',
                                     args.gen_dir,
                                     '{}_{}_{}'.format(temp, split_file, decode_mode))
+            os.makedirs(os.path.dirname(curr_dir),exist_ok=True)
             print(curr_dir)
-            gold_dir = os.path.join('/u/scr/xlisali/contrast_LM/transformers/examples/text-generation/',
+            gold_dir = os.path.join('examples/text-generation/',
                                     args.gen_dir,
                                     '{}_{}_{}'.format(temp, split_file,'gold'))
+            os.makedirs(os.path.dirname(gold_dir),exist_ok=True)
             print(gold_dir)
             write_e2e_corr(prompt_text_lst, prompt_text_dict, gold_dir)
-            src_dir = os.path.join('/u/scr/xlisali/contrast_LM/transformers/examples/text-generation/',
+            src_dir = os.path.join('examples/text-generation/',
                                    args.gen_dir,
                                    '{}_{}_{}'.format(temp,split_file, 'src'))
+            os.makedirs(os.path.dirname(src_dir),exist_ok=True)
             write_e2e_src(prompt_text_lst, src_dir)
             out_handle = open(curr_dir, 'w')
 
@@ -585,9 +591,9 @@ def main():
         QUICK_CHECK = False
         if args.task_mode == 'webnlg':
             if args.eval_dataset == 'valid':
-                test_path = "/u/scr/xlisali/WebNLG/webnlg-dataset/webnlg_challenge_2017/dev.json"
+                test_path = "../data/webnlg_challenge_2017/dev.json"
             elif args.eval_dataset == 'test':
-                test_path = "/u/scr/xlisali/WebNLG/webnlg-dataset/webnlg_challenge_2017/test.json"
+                test_path = "../data/webnlg_challenge_2017/test.json"
             else:
                 assert False,  "eval_dataset needs to be [valid, test]"
             prompt_text_dict = read_webnlg_files(test_path, tokenizer)
@@ -606,18 +612,21 @@ def main():
                 temp = os.path.basename(args.model_name_or_path)
             split_file = args.eval_dataset # test
             decode_mode = 'beam'
-            curr_dir = os.path.join('/u/scr/xlisali/contrast_LM/transformers/examples/text-generation/',
+            curr_dir = os.path.join('examples/text-generation/',
                                     args.gen_dir,
                                     '{}_{}_{}'.format(temp, split_file, decode_mode))
+            os.makedirs(os.path.dirname(curr_dir),exist_ok=True)
             print(curr_dir)
-            gold_dir = os.path.join('/u/scr/xlisali/contrast_LM/transformers/examples/text-generation/',
+            gold_dir = os.path.join('examples/text-generation/',
                                     args.gen_dir,
                                     '{}_{}_{}'.format(temp, split_file, 'gold'))
+            os.makedirs(os.path.dirname(gold_dir),exist_ok=True)
             print(gold_dir)
             write_e2e_corr(prompt_text_pair, prompt_text_dict, gold_dir)
-            src_dir = os.path.join('/u/scr/xlisali/contrast_LM/transformers/examples/text-generation/',
+            src_dir = os.path.join('examples/text-generation/',
                                     args.gen_dir,
                                     '{}_{}_{}'.format(temp, split_file, 'src'))
+            os.makedirs(os.path.dirname(src_dir),exist_ok=True)
             write_e2e_src(prompt_text_pair, src_dir)
 
 
@@ -630,7 +639,7 @@ def main():
             test_path = "/u/scr/xlisali/IMDB/test.txt"
             prompt_text_dict = read_classifySentiment_files(test_path, tokenizer)
         elif args.task_mode == 'classify-topic':
-            test_path = "/u/scr/xlisali/contrast_LM/transformers/examples/text-classification/glue_data/AG-news/dev1.tsv"
+            test_path = "examples/text-classification/glue_data/AG-news/dev1.tsv"
             prompt_text_dict = read_classifyTopic_files(test_path, tokenizer)
 
         args.num_return_sequences = 1
@@ -651,25 +660,25 @@ def main():
             # print(prompt_text_dict)
             split_file = 'test' # test
             decode_mode = 'greedy'
-            curr_dir = os.path.join('/u/scr/xlisali/contrast_LM/transformers/examples/text-generation/',
+            curr_dir = os.path.join('examples/text-generation/',
                                     args.gen_dir,
                                     '{}_{}_{}'.format(temp, split_file, decode_mode))
-            # curr_dir = '/u/scr/xlisali/contrast_LM/transformers/examples/text-generation/classify_results/{}_{}_{}'.format(
+            # curr_dir = 'examples/text-generation/classify_results/{}_{}_{}'.format(
             #     temp, split_file, decode_mode)
             print(curr_dir)
-            gold_dir = os.path.join('/u/scr/xlisali/contrast_LM/transformers/examples/text-generation/',
+            gold_dir = os.path.join('examples/text-generation/',
                                     args.gen_dir,
                                     '{}_{}_{}'.format(temp, split_file, 'gold'))
-            # gold_dir = '/u/scr/xlisali/contrast_LM/transformers/examples/text-generation/classify_results/{}_{}_{}'.format(
+            # gold_dir = 'examples/text-generation/classify_results/{}_{}_{}'.format(
             #     temp,
             #     split_file,
             #     'gold')
             print(gold_dir)
             write_e2e_src(prompt_text_tgt, gold_dir)
-            src_dir = os.path.join('/u/scr/xlisali/contrast_LM/transformers/examples/text-generation/',
+            src_dir = os.path.join('examples/text-generation/',
                                    args.gen_dir,
                                    '{}_{}_{}'.format(temp, split_file, 'src'))
-            # src_dir = '/u/scr/xlisali/contrast_LM/transformers/examples/text-generation/classify_results/{}_{}_{}'.format(
+            # src_dir = 'examples/text-generation/classify_results/{}_{}_{}'.format(
             #     temp,
             #     split_file,
             #     'src')
@@ -705,13 +714,13 @@ def main():
             # print(prompt_text_dict)
             split_file = 'test' # test
             decode_mode = 'beam'
-            curr_dir = os.path.join('/u/scr/xlisali/contrast_LM/transformers/examples/text-generation/',
+            curr_dir = os.path.join('examples/text-generation/',
                                     args.gen_dir,
                                     '{}_{}_{}'.format(temp, split_file, decode_mode))
 
 
             print(curr_dir)
-            gold_dir = os.path.join('/u/scr/xlisali/contrast_LM/transformers/examples/text-generation/',
+            gold_dir = os.path.join('examples/text-generation/',
                                     args.gen_dir,
                                     '{}_{}_{}'.format(temp, split_file, 'gold'))
             print(gold_dir)
@@ -743,7 +752,7 @@ def main():
         else:
             prefix = args.prefix if args.prefix else args.padding_text
             encoded_prompt = tokenizer.encode(prefix + prompt_text, add_special_tokens=False, return_tensors="pt")
-        encoded_prompt = encoded_prompt.to(args.device)
+        encoded_prompt = encoded_prompt
 
         if encoded_prompt.size()[-1] == 0:
             input_ids = None
@@ -754,7 +763,7 @@ def main():
 
         if args.control_mode == 'yes' and args.control_dataless != 'yes':
             # URGENT, check whether the next line is necessary?
-            # control_code = torch.LongTensor(control_codes[prompt_idx]).to(model.device).unsqueeze(0).expand(args.num_return_sequences, -1)
+            # control_code = torch.LongTensor(control_codes[prompt_idx]).unsqueeze(0).expand(args.num_return_sequences, -1)
             control_code = None
             pass
         else:
@@ -778,22 +787,24 @@ def main():
                     src = ' {} '.format(src)
                 src = tokenizer(src, add_special_tokens=True, truncation=True, is_split_into_words=False)['input_ids']
 
-                mode = None
-                if 'cat2' in args.prefixModel_name_or_path or 'cat' in args.prefixModel_name_or_path:
-                    mode = 'cat'
-                elif 'nopeek' in args.prefixModel_name_or_path or 'nop' in args.prefixModel_name_or_path:
-                    mode = 'nopeek'
-                elif 'peek' in args.prefixModel_name_or_path or 'pee' in args.prefixModel_name_or_path:
-                    mode = 'peek'
-                elif 'prefixtune15' in args.prefixModel_name_or_path:
-                    mode = 'instruction_based'
-                    # assert False, "prefixtune20 shouldn't be processed here."
-                else:
-                    if args.format_mode == 'infix':
-                        mode = 'infix'
-                    else:
-                        assert False, "Given that it's in prefix tuning mode, need to specify a valid prefix mode, " \
-                                      "(cat, nopeek, peek)"
+                # mode = None
+                # if 'cat2' in args.prefixModel_name_or_path or 'cat' in args.prefixModel_name_or_path:
+                #     mode = 'cat'
+                # elif 'nopeek' in args.prefixModel_name_or_path or 'nop' in args.prefixModel_name_or_path:
+                #     mode = 'nopeek'
+                # elif 'peek' in args.prefixModel_name_or_path or 'pee' in args.prefixModel_name_or_path:
+                #     mode = 'peek'
+                # elif 'prefixtune15' in args.prefixModel_name_or_path:
+                #     mode = 'instruction_based'
+                #     # assert False, "prefixtune20 shouldn't be processed here."
+                # else:
+                #     if args.format_mode == 'infix':
+                #         mode = 'infix'
+                #     else:
+                #         assert False, "Given that it's in prefix tuning mode, need to specify a valid prefix mode, " \
+                #                       "(cat, nopeek, peek)"
+
+                mode = args.format_mode
 
                 print(mode)
 
@@ -808,15 +819,15 @@ def main():
                 if mode == 'nopeek' or mode == 'infix':
                     # print('the old input_ids is ', input_ids) # this looks right
                     input_pp = tokenizer.bos_token
-                    encoded_prompt = tokenizer(input_pp, add_special_tokens=True, truncation=True, return_tensors="pt", is_split_into_words=False)['input_ids'].to(model.device)
+                    encoded_prompt = tokenizer(input_pp, add_special_tokens=True, truncation=True, return_tensors="pt", is_split_into_words=False)['input_ids']
                     input_ids = encoded_prompt
 
-                if mode in ['cat', 'peek', 'nopeek', 'infix']:
-                    control_code = cc.long().unsqueeze(0)
-                elif mode == 'instruction_based':
-                    control_code = None
-                else:
-                    assert False, "invalid mode type."
+                # if mode in ['cat', 'peek', 'nopeek', 'infix']:
+                #     control_code = cc.long().unsqueeze(0)
+                # elif mode == 'instruction_based':
+                #     control_code = None
+                # else:
+                #     assert False, "invalid mode type."
 
                 # TODO.LISA
                 if config.optim_prefix:
@@ -830,22 +841,25 @@ def main():
                 src_cat = tokenizer(cat, add_special_tokens=True, truncation=True, is_split_into_words=True)['input_ids']
                 src = tokenizer(src, add_special_tokens=True, truncation=True, is_split_into_words=False)['input_ids']
 
-                mode = None
-                if 'cat2' in args.prefixModel_name_or_path or 'cat' in args.prefixModel_name_or_path:
-                    mode = 'cat'
-                elif 'nopeek' in args.prefixModel_name_or_path or 'nop' in args.prefixModel_name_or_path:
-                    mode = 'nopeek'
-                elif 'peek' in args.prefixModel_name_or_path or 'pee' in args.prefixModel_name_or_path:
-                    mode = 'peek'
-                elif 'tune_y_' in args.prefixModel_name_or_path or config.optim_prefix:
-                    mode = 'instruction_based'
-                    # assert False, "prefixtune20 shouldn't be processed here."
-                else:
-                    if args.format_mode == 'infix':
-                        mode = 'infix'
-                    else:
-                        assert False, "Given that it's in prefix tuning mode, need to specify a valid prefix mode, " \
-                                      "(cat, nopeek, peek)"
+                # mode = None
+                # if 'cat2' in args.prefixModel_name_or_path or 'cat' in args.prefixModel_name_or_path:
+                #     mode = 'cat'
+                # elif 'nopeek' in args.prefixModel_name_or_path or 'nop' in args.prefixModel_name_or_path:
+                #     mode = 'nopeek'
+                # elif 'peek' in args.prefixModel_name_or_path or 'pee' in args.prefixModel_name_or_path:
+                #     mode = 'peek'
+                # elif 'tune_y_' in args.prefixModel_name_or_path or config.optim_prefix:
+                #     mode = 'instruction_based'
+                #     # assert False, "prefixtune20 shouldn't be processed here."
+                # else:
+                #     if args.format_mode == 'infix':
+                #         mode = 'infix'
+                #     else:
+                #         assert False, "Given that it's in prefix tuning mode, need to specify a valid prefix mode, " \
+                #                       "(cat, nopeek, peek)"
+
+                
+                mode = args.format_mode
 
                 print(mode)
 
@@ -855,15 +869,15 @@ def main():
                     cc = src
                 elif mode == 'infix':
                     cc = src
-                # print('control code is ', cc)
+                print('control code is ', cc)
 
                 if mode == 'nopeek' or mode == 'infix':
                     input_pp = tokenizer.bos_token
-                    encoded_prompt = tokenizer(input_pp, add_special_tokens=True, truncation=True, return_tensors="pt", is_split_into_words=False)['input_ids'].to(model.device)
+                    encoded_prompt = tokenizer(input_pp, add_special_tokens=True, truncation=True, return_tensors="pt", is_split_into_words=False)['input_ids']
                     input_ids = encoded_prompt
 
                 if mode in ['cat', 'peek', 'nopeek', 'infix']:
-                    control_code = cc.long().unsqueeze(0)
+                    control_code = jt.Var(cc).long().unsqueeze(0)
                 elif mode == 'instruction_based':
                     control_code = None
                 else:
@@ -900,19 +914,17 @@ def main():
 
             # assert control_code is None
             print(decode_mode)
+            input_ids = jt.from_torch(input_ids)
             if decode_mode == 'nucleus':
-                output_sequences = gpt2.generate(
+                output_sequences = model.generate(
                     input_ids=input_ids,
-                    emb_match=None,
-                    control_code=None,
-                    past_key_values=prompt,
-                    max_length=args.length + len(encoded_prompt[0]),
+                    # past_key_values=prompt,
+                    maxlen=args.length + len(encoded_prompt[0]),
                     temperature=args.temperature,
+                    decode_strategy = 'top-p',
                     top_k=args.k,
-                    top_p=0.8,
-                    repetition_penalty=args.repetition_penalty,
-                    do_sample=True,
-                    num_return_sequences=args.num_return_sequences,
+                    gpt2 = gpt2,
+                    top_p=0.4,
                 )
             elif decode_mode == 'beam':
                 ############################
@@ -923,39 +935,29 @@ def main():
                 # print(prompt[5][0][0][0])
 
                 #############################
-                output_sequences = gpt2.generate(
+                output_sequences = model.generate(
                     input_ids=input_ids,
-                    emb_match=None,
-                    control_code=None,
-                    past_key_values=prompt,
-                    max_length=args.length + len(encoded_prompt[0]),
-                    min_length=5,
+                    # past_key_values=prompt,
+                    maxlen=args.length + len(encoded_prompt[0]),
                     temperature=args.temperature,
+                    decode_strategy = 'top-p',
+                    # tokenizer = tokenizer,
                     top_k=args.k,
-                    top_p=0.9, #top_p=0.5,
-                    repetition_penalty=args.repetition_penalty, ##args.repetition_penalty,
-                    do_sample=False,
-                    num_beams=5,
-                    bad_words_ids=[[628], [198]] if True else None,
-                    num_return_sequences=1,
+                    gpt2 = gpt2,
+                    top_p=0.4,
                 )
                 # print(output_sequences)
 
             elif decode_mode == 'greedy':
-                output_sequences = gpt2.generate(
+                output_sequences = model.generate(
                     input_ids=input_ids,
-                    emb_match=None,
-                    control_code=None,
-                    past_key_values=prompt,
-                    max_length=args.length + len(encoded_prompt[0]),
-                    min_length=5,
+                    # past_key_values=prompt,
+                    maxlen=args.length + len(encoded_prompt[0]),
                     temperature=args.temperature,
+                    decode_strategy = 'top-p',
                     top_k=args.k,
-                    top_p=0.5,
-                    repetition_penalty=args.repetition_penalty,
-                    do_sample=False,
-                    bad_words_ids=[[628], [198]] if True else None,
-                    num_return_sequences=1,
+                    gpt2 = gpt2,
+                    top_p=0.4,
                 )
 
 
@@ -965,7 +967,7 @@ def main():
         if len(output_sequences.shape) > 2:
             output_sequences.squeeze_()
 
-        generated_sequences = []
+        # generated_sequences = []
 
         if QUICK_CHECK:
             for generated_sequence_idx, generated_sequence in enumerate(output_sequences):
@@ -977,15 +979,16 @@ def main():
                 text = tokenizer.decode(generated_sequence, clean_up_tokenization_spaces=True)
 
                 # Remove all text after the stop token
-                text = text[: text.find(args.stop_token) if args.stop_token else None]
+                text = text[text.find(args.stop_token) if args.stop_token else 0: text.find(args.stop_token, beg = text.find(args.stop_token)+1) if args.stop_token else None]
 
                 # Add the prompt at the beginning of the sequence. Remove the excess text that was used for pre-processing
                 total_sequence = (
                     prompt_text + text[len(tokenizer.decode(encoded_prompt[0], clean_up_tokenization_spaces=True)) :]
                 )
 
-                generated_sequences.append(total_sequence)
+                # generated_sequences.append(total_sequence)
                 print(total_sequence)
+                
         else:
             for generated_sequence_idx, generated_sequence in enumerate(output_sequences):
                 print("=== GENERATED SEQUENCE {} ===".format(generated_sequence_idx + 1))
@@ -1009,6 +1012,7 @@ def main():
 
                 if text_output:
                     print(text_output, file=out_handle)
+                    print(text_output)
                 else:
                     print('Error', file=out_handle)
 

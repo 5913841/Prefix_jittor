@@ -71,7 +71,7 @@ def find_pruneable_heads_and_indices(
 
 
 def select_index(metrix: jt.Var, index: jt.Var, dim: int = 0) -> jt.Var:
-    return metrix[(slice(),)*dim+(index,)]
+    return metrix[(slice(None),)*dim+(index,)]
 
 dict_obj = {
     # 'int64':{'min':t_finfo(t_int64).min,'max':t_finfo(t_int64).max, 'func':jt.int64},
@@ -136,8 +136,9 @@ class GPT2MLP(nn.Module):
         self.dropout = nn.Dropout(config.resid_pdrop)
 
     def execute(self, hidden_states: Optional[Tuple[jt.Var]]) -> jt.Var:
+        dfunc = finfo(str(hidden_states.dtype)).func
         hidden_states = self.c_fc(hidden_states)
-        hidden_states = self.act(hidden_states)
+        hidden_states = dfunc(self.act(hidden_states))
         hidden_states = self.c_proj(hidden_states)
         hidden_states = self.dropout(hidden_states)
         return hidden_states
@@ -194,7 +195,7 @@ class GPT2Attention(nn.Module):
         w = jt.matmul(q,k)
 
         if self.scale:
-            w = w / (float(v.size(-1)) ** 0.5)
+            w = w / finfo(str(v.dtype)).func(jt.Var(float(v.size(-1))**0.5))
         nd, ns = w.size(-2), w.size(-1)
 
         # Layer-wise attention scaling
@@ -323,7 +324,7 @@ class GPT2Block(nn.Module):
         output_attentions: Optional[bool] = False,
     ) -> Union[Tuple[jt.Var], Optional[Tuple[jt.Var, Tuple[jt.Var, ...]]]]:
         residual = hidden_states
-        hidden_states = self.ln_1(hidden_states)
+        hidden_states = finfo(str(residual.dtype)).func(self.ln_1(hidden_states))
         attn_outputs = self.attn(
             hidden_states,
             layer_past=layer_past,
@@ -360,7 +361,7 @@ class GPT2Block(nn.Module):
             outputs = outputs + cross_attn_outputs[1:]  # add cross attentions if we output attention weights
 
         residual = hidden_states
-        hidden_states = self.ln_2(hidden_states)
+        hidden_states = finfo(str(residual.dtype)).func(self.ln_2(hidden_states))
         feed_forward_hidden_states = self.mlp(hidden_states)
         # residual connection
         hidden_states = residual + feed_forward_hidden_states
@@ -543,7 +544,7 @@ class GPT2Model(GPT2PreTrainedModel):
             if output_attentions:
                 all_self_attentions = all_self_attentions + (outputs[2],)
 
-        hidden_states = self.ln_f(hidden_states)
+        hidden_states = finfo(str(hidden_states.dtype)).func(self.ln_f(hidden_states))
 
         hidden_states = hidden_states.view(output_shape)
         # Add last hidden state
